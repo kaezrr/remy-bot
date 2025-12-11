@@ -1,6 +1,9 @@
 package store
 
-import "errors"
+import (
+	"errors"
+	"strings"
+)
 
 type Deadline struct {
 	ID       int
@@ -27,12 +30,13 @@ type Store struct {
 
 func New() *Store {
 	return &Store{
-		deadlines:      make([]Deadline, 0),
+		deadlines:      []Deadline{},
 		nextDeadlineID: 1,
-		baskets:        make(map[string]*Basket),
+		baskets:        map[string]*Basket{},
 	}
 }
 
+// TODO: sort deadlines by datetime
 func (s *Store) AddDeadline(title string, datetime string) Deadline {
 	deadline := Deadline{
 		ID:       s.nextDeadlineID,
@@ -62,16 +66,16 @@ func (s *Store) DeleteDeadline(id int) error {
 }
 
 func (s *Store) AddBasket(name string) error {
-	_, ok := s.baskets[name]
+	name = strings.ToLower(name)
 
-	if ok {
+	if _, ok := s.baskets[name]; ok {
 		return errors.New("basket already exists")
 	}
 
 	s.baskets[name] = &Basket{
 		Name:      name,
 		NextPinID: 1,
-		Pins:      make([]Pin, 0),
+		Pins:      []Pin{},
 	}
 
 	return nil
@@ -87,19 +91,19 @@ func (s *Store) ListBaskets() []string {
 	return baskets
 }
 
-func (s *Store) DeleteBasket(basketName string) error {
-	_, ok := s.baskets[basketName]
+func (s *Store) DeleteBasket(name string) error {
+	name = strings.ToLower(name)
 
-	if !ok {
+	if _, ok := s.baskets[name]; !ok {
 		return errors.New("basket does not exist")
 	}
 
-	delete(s.baskets, basketName)
-
+	delete(s.baskets, name)
 	return nil
 }
 
 func (s *Store) AddPin(basketName string, content string) (Pin, error) {
+	basketName = strings.ToLower(basketName)
 	basket, ok := s.baskets[basketName]
 
 	if !ok {
@@ -117,6 +121,7 @@ func (s *Store) AddPin(basketName string, content string) (Pin, error) {
 }
 
 func (s *Store) ListPins(basketName string) ([]Pin, error) {
+	basketName = strings.ToLower(basketName)
 	basket, ok := s.baskets[basketName]
 
 	if !ok {
@@ -124,4 +129,24 @@ func (s *Store) ListPins(basketName string) ([]Pin, error) {
 	}
 
 	return basket.Pins, nil
+}
+
+func (s *Store) DeletePin(basketName string, id int) error {
+	basketName = strings.ToLower(basketName)
+	basket, ok := s.baskets[basketName]
+
+	if !ok {
+		return errors.New("basket does not exist")
+	}
+
+	for i, p := range basket.Pins {
+		if p.ID != id {
+			continue
+		}
+		basket.Pins = append(basket.Pins[:i], basket.Pins[i+1:]...)
+		return nil
+	}
+
+	return errors.New("pin does not exist")
+
 }

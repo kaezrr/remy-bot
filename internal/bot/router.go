@@ -5,10 +5,15 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/kaezrr/remy-bot/internal/store"
 	"github.com/rs/zerolog/log"
 )
+
+type Response struct {
+	Text string
+}
 
 const HELP = `Usage:
 .d  deadlines
@@ -17,26 +22,6 @@ const HELP = `Usage:
 .h  Print this message
 
 Use <cmd> to list further commands`
-
-const DEADLINE_HELP = `Usage:
-.d list                       list all deadlines
-.d del <id>                   remove a deadline
-.d add <date> <time> <title>  add a new deadline
-`
-
-const BASKET_HELP = `Usage:
-.b list            list all baskets
-.b add <name>      add a new basket
-.b del <name>      remove a basket`
-
-const PIN_HELP = `Usage:
-.p list <basket>              list all pins in a basket
-.p add <basket> <content>     add a new pin
-.p del <basket> <id>          remove a pin from a basket`
-
-type Response struct {
-	Text string
-}
 
 func Handle(input string, prefix string, s *store.Store) Response {
 	after, found := strings.CutPrefix(input, prefix)
@@ -83,6 +68,11 @@ func Handle(input string, prefix string, s *store.Store) Response {
 	return Response{Text: HELP}
 }
 
+const BASKET_HELP = `Usage:
+.b list            list all baskets
+.b add <name>      add a new basket
+.b del <name>      remove a basket`
+
 func basketHandler(parts []string, s *store.Store) (string, error) {
 	if len(parts) == 0 {
 		return BASKET_HELP, nil
@@ -92,12 +82,11 @@ func basketHandler(parts []string, s *store.Store) (string, error) {
 	switch parts[0] {
 	case "add":
 		if len(parts) < 2 {
-			return "", errors.New("basket name required")
+			return "", errors.New("missing basket name")
 		}
 		name := parts[1]
 
-		err := s.AddBasket(name)
-		if err != nil {
+		if err := s.AddBasket(name); err != nil {
 			return "", err
 		}
 
@@ -118,12 +107,11 @@ func basketHandler(parts []string, s *store.Store) (string, error) {
 
 	case "del":
 		if len(parts) < 2 {
-			return "", errors.New("basket name required")
+			return "", errors.New("missing basket name")
 		}
 		name := parts[1]
 
-		err := s.DeleteBasket(name)
-		if err != nil {
+		if err := s.DeleteBasket(name); err != nil {
 			return "", err
 		}
 
@@ -132,6 +120,12 @@ func basketHandler(parts []string, s *store.Store) (string, error) {
 
 	return BASKET_HELP, nil
 }
+
+const DEADLINE_HELP = `Usage:
+.d list                       list all deadlines
+.d del <id>                   remove a deadline
+.d add <date> <time> <title>  add a new deadline
+`
 
 func deadlineHandler(parts []string, s *store.Store) (string, error) {
 	if len(parts) == 0 {
@@ -142,7 +136,7 @@ func deadlineHandler(parts []string, s *store.Store) (string, error) {
 	case "list":
 		deadlines := s.ListDeadlines()
 		if len(deadlines) == 0 {
-			return "there are no pending deadlines", nil
+			return "no upcoming deadlines", nil
 		}
 
 		out := "upcoming deadlines:\n"
@@ -158,16 +152,25 @@ func deadlineHandler(parts []string, s *store.Store) (string, error) {
 		}
 
 		date := parts[1]
-		time := parts[2]
+		timeStr := parts[2]
+
+		if _, err := time.Parse("2006-01-02", date); err != nil {
+			return "", errors.New("invalid date, use YYYY-MM-DD")
+		}
+
+		if _, err := time.Parse("15:04", timeStr); err != nil {
+			return "", errors.New("invalid time, use HH:MM")
+		}
+
 		title := strings.Join(parts[3:], " ")
 
-		d := s.AddDeadline(title, date+" "+time)
+		d := s.AddDeadline(title, date+" "+timeStr)
 
 		return fmt.Sprintf("deadline #%d added: %s (%s)", d.ID, d.Title, d.DateTime), nil
 
 	case "del":
 		if len(parts) < 2 {
-			return "", errors.New("deadline id required")
+			return "", errors.New("missing deadline id")
 		}
 		idStr := parts[1]
 		id, err := strconv.Atoi(idStr)
@@ -176,17 +179,84 @@ func deadlineHandler(parts []string, s *store.Store) (string, error) {
 			return "", errors.New("id must be an integer")
 		}
 
-		err = s.DeleteDeadline(id)
-		if err != nil {
+		if err = s.DeleteDeadline(id); err != nil {
 			return "", err
 		}
 
-		return "deadline deleted successfully", nil
+		return fmt.Sprintf("deadline #%d deleted successfully", id), nil
 	}
 
 	return DEADLINE_HELP, nil
 }
 
-func pinHandler(_ []string, _ *store.Store) (string, error) {
-	return "pins coming soon", nil
+const PIN_HELP = `Usage:
+.p list <basket>              list all pins in a basket
+.p add <basket> <content>     add a new pin
+.p del <basket> <id>          remove a pin from a basket`
+
+func pinHandler(parts []string, s *store.Store) (string, error) {
+	if len(parts) == 0 {
+		return PIN_HELP, nil
+	}
+
+	switch parts[0] {
+	case "list":
+		if len(parts) < 2 {
+			return "", errors.New("missing basket name")
+		}
+
+		name := parts[1]
+		pins, err := s.ListPins(name)
+
+		if err != nil {
+			return "", err
+		}
+
+		if len(pins) == 0 {
+			return "no pins in basket " + name, nil
+		}
+
+		out := name + " pins:\n"
+		for _, p := range pins {
+			out += fmt.Sprintf("%d. %s\n", p.ID, p.Content)
+		}
+
+		return out, nil
+
+	case "add":
+		if len(parts) < 3 {
+			return "", errors.New("usage: .p add <basket> <content>")
+		}
+
+		name := parts[1]
+		content := strings.Join(parts[2:], " ")
+		pin, err := s.AddPin(name, content)
+
+		if err != nil {
+			return "", err
+		}
+
+		return fmt.Sprintf("pin #%d added to %s", pin.ID, name), nil
+
+	case "del":
+		if len(parts) < 3 {
+			return "", errors.New("usage: .p del <basket> <id>")
+		}
+
+		name := parts[1]
+		idStr := parts[2]
+		id, err := strconv.Atoi(idStr)
+
+		if err != nil {
+			return "", errors.New("id must be an integer")
+		}
+
+		if err = s.DeletePin(name, id); err != nil {
+			return "", err
+		}
+
+		return fmt.Sprintf("pin #%d successfully deleted", id), nil
+	}
+
+	return PIN_HELP, nil
 }
