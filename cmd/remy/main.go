@@ -5,6 +5,7 @@ import (
 
 	"github.com/kaezrr/remy-bot/internal/bot"
 	"github.com/kaezrr/remy-bot/internal/config"
+	"github.com/kaezrr/remy-bot/internal/store"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -26,6 +27,22 @@ func main() {
 		Str("prefix", cfg.Prefix).
 		Msg("config loaded")
 
-	resp := bot.Handle(".d", cfg.Prefix)
-	log.Info().Msg(resp.Text)
+	s := store.New()
+
+	tests := []string{
+		".b",
+		".b dbms",
+		".b add dbms",
+		".b add os",
+		".b list",
+		".b remove dbms",
+		".b list",
+		".b add maths extra words should be ignored",
+		".b list",
+	}
+
+	for _, cmd := range tests {
+		resp := bot.Handle(cmd, cfg.Prefix, s)
+		log.Info().Msgf("cmd: %s\n%s", cmd, resp.Text)
+	}
 }

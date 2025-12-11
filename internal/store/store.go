@@ -61,7 +61,7 @@ func (s *Store) DeleteDeadline(id int) error {
 	return errors.New("deadline does not exist")
 }
 
-func (s *Store) CreateBasket(name string) error {
+func (s *Store) AddBasket(name string) error {
 	_, ok := s.baskets[name]
 
 	if ok {
@@ -85,6 +85,18 @@ func (s *Store) ListBaskets() []string {
 	}
 
 	return baskets
+}
+
+func (s *Store) DeleteBasket(basketName string) error {
+	_, ok := s.baskets[basketName]
+
+	if !ok {
+		return errors.New("basket does not exist")
+	}
+
+	delete(s.baskets, basketName)
+
+	return nil
 }
 
 func (s *Store) AddPin(basketName string, content string) (Pin, error) {
