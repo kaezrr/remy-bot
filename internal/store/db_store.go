@@ -53,4 +53,17 @@ func NewDBStore(path string) (*DBStore, error) {
 	return &DBStore{db: db}, nil
 }
 
-// var _ Store = (*DBStore)(nil)
+func (d *DBStore) AddDeadline(title string, datetime string) (Deadline, error)
+
+// func (d *DBStore) ListDeadlines() ([]Deadline, error)
+// func (d *DBStore) DeleteDeadline(id int) error
+//
+// func (d *DBStore) AddBasket(name string) error
+// func (d *DBStore) ListBaskets() ([]string, error)
+// func (d *DBStore) DeleteBasket(name string) error
+//
+// func (d *DBStore) AddPin(basketName string, content string) (Pin, error)
+// func (d *DBStore) ListPins(basketName string) ([]Pin, error)
+// func (d *DBStore) DeletePin(basketName string, id int) error
+
+var _ Store = (*DBStore)(nil)

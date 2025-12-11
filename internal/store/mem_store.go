@@ -2,13 +2,20 @@ package store
 
 import (
 	"errors"
+	"sort"
 	"strings"
+	"time"
 )
 
 type Deadline struct {
 	ID       int
 	Title    string
 	DateTime string
+}
+
+func (d Deadline) Time() time.Time {
+	dt, _ := time.Parse("2006-01-02 15:04", d.DateTime)
+	return dt
 }
 
 type Pin struct {
@@ -36,7 +43,6 @@ func NewMemStore() *MemStore {
 	}
 }
 
-// TODO: sort deadlines by datetime
 func (s *MemStore) AddDeadline(title string, datetime string) (Deadline, error) {
 	deadline := Deadline{
 		ID:       s.nextDeadlineID,
@@ -46,6 +52,11 @@ func (s *MemStore) AddDeadline(title string, datetime string) (Deadline, error) 
 
 	s.nextDeadlineID += 1
 	s.deadlines = append(s.deadlines, deadline)
+
+	sort.Slice(s.deadlines, func(i, j int) bool {
+		return s.deadlines[i].Time().Before(s.deadlines[j].Time())
+	})
+
 	return deadline, nil
 }
 
