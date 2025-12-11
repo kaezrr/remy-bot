@@ -147,8 +147,16 @@ func deadlineHandler(parts []string, s *store.Store) (string, error) {
 		return out, nil
 
 	case "add":
+		if len(parts) < 2 {
+			return "missing date, time, and title", nil
+		}
+
+		if len(parts) < 3 {
+			return "missing time and title", nil
+		}
+
 		if len(parts) < 4 {
-			return "", errors.New("usage: .d add <date> <time> <title>")
+			return "missing title", nil
 		}
 
 		date := parts[1]
@@ -224,8 +232,12 @@ func pinHandler(parts []string, s *store.Store) (string, error) {
 		return out, nil
 
 	case "add":
+		if len(parts) < 2 {
+			return "", errors.New("missing basket name")
+		}
+
 		if len(parts) < 3 {
-			return "", errors.New("usage: .p add <basket> <content>")
+			return "", errors.New("missing pin content")
 		}
 
 		name := parts[1]
@@ -239,8 +251,12 @@ func pinHandler(parts []string, s *store.Store) (string, error) {
 		return fmt.Sprintf("pin #%d added to %s", pin.ID, name), nil
 
 	case "del":
+		if len(parts) < 2 {
+			return "", errors.New("missing basket name")
+		}
+
 		if len(parts) < 3 {
-			return "", errors.New("usage: .p del <basket> <id>")
+			return "", errors.New("missing pin id")
 		}
 
 		name := parts[1]
