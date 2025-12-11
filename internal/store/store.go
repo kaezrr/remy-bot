@@ -1,12 +1,12 @@
 package store
 
 type Store interface {
-	AddDeadline(title string, datetime string) Deadline
-	ListDeadlines() []Deadline
+	AddDeadline(title string, datetime string) (Deadline, error)
+	ListDeadlines() ([]Deadline, error)
 	DeleteDeadline(id int) error
 
 	AddBasket(name string) error
-	ListBaskets() []string
+	ListBaskets() ([]string, error)
 	DeleteBasket(name string) error
 
 	AddPin(basketName string, content string) (Pin, error)

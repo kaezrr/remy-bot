@@ -23,7 +23,7 @@ const HELP = `Usage:
 
 Use <cmd> to list further commands`
 
-func Handle(input string, prefix string, s *store.MemStore) Response {
+func Handle(input string, prefix string, s store.Store) Response {
 	after, found := strings.CutPrefix(input, prefix)
 
 	if !found {
@@ -93,7 +93,12 @@ func basketHandler(parts []string, s store.Store) (string, error) {
 		return "basket created successfully", nil
 
 	case "list":
-		baskets := s.ListBaskets()
+		baskets, err := s.ListBaskets()
+
+		if err != nil {
+			return "", err
+		}
+
 		if len(baskets) == 0 {
 			return "there are no baskets", nil
 		}
@@ -134,7 +139,12 @@ func deadlineHandler(parts []string, s store.Store) (string, error) {
 
 	switch parts[0] {
 	case "list":
-		deadlines := s.ListDeadlines()
+		deadlines, err := s.ListDeadlines()
+
+		if err != nil {
+			return "", err
+		}
+
 		if len(deadlines) == 0 {
 			return "no upcoming deadlines", nil
 		}
@@ -172,7 +182,11 @@ func deadlineHandler(parts []string, s store.Store) (string, error) {
 
 		title := strings.Join(parts[3:], " ")
 
-		d := s.AddDeadline(title, date+" "+timeStr)
+		d, err := s.AddDeadline(title, date+" "+timeStr)
+
+		if err != nil {
+			return "", err
+		}
 
 		return fmt.Sprintf("deadline #%d added: %s (%s)", d.ID, d.Title, d.DateTime), nil
 

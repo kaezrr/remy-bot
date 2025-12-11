@@ -37,7 +37,7 @@ func NewMemStore() *MemStore {
 }
 
 // TODO: sort deadlines by datetime
-func (s *MemStore) AddDeadline(title string, datetime string) Deadline {
+func (s *MemStore) AddDeadline(title string, datetime string) (Deadline, error) {
 	deadline := Deadline{
 		ID:       s.nextDeadlineID,
 		Title:    title,
@@ -46,11 +46,11 @@ func (s *MemStore) AddDeadline(title string, datetime string) Deadline {
 
 	s.nextDeadlineID += 1
 	s.deadlines = append(s.deadlines, deadline)
-	return deadline
+	return deadline, nil
 }
 
-func (s *MemStore) ListDeadlines() []Deadline {
-	return s.deadlines
+func (s *MemStore) ListDeadlines() ([]Deadline, error) {
+	return s.deadlines, nil
 }
 
 func (s *MemStore) DeleteDeadline(id int) error {
@@ -81,14 +81,14 @@ func (s *MemStore) AddBasket(name string) error {
 	return nil
 }
 
-func (s *MemStore) ListBaskets() []string {
+func (s *MemStore) ListBaskets() ([]string, error) {
 	baskets := make([]string, 0)
 
 	for _, b := range s.baskets {
 		baskets = append(baskets, b.Name)
 	}
 
-	return baskets
+	return baskets, nil
 }
 
 func (s *MemStore) DeleteBasket(name string) error {
