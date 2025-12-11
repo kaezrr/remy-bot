@@ -3,9 +3,9 @@ package store
 import "errors"
 
 type Deadline struct {
-	ID    int
-	Title string
-	Date  string
+	ID       int
+	Title    string
+	DateTime string
 }
 
 type Pin struct {
@@ -33,11 +33,11 @@ func New() *Store {
 	}
 }
 
-func (s *Store) AddDeadline(title string, date string) Deadline {
+func (s *Store) AddDeadline(title string, datetime string) Deadline {
 	deadline := Deadline{
-		ID:    s.nextDeadlineID,
-		Title: title,
-		Date:  date,
+		ID:       s.nextDeadlineID,
+		Title:    title,
+		DateTime: datetime,
 	}
 
 	s.nextDeadlineID += 1

@@ -29,17 +29,7 @@ func main() {
 
 	s := store.New()
 
-	tests := []string{
-		".b",
-		".b dbms",
-		".b add dbms",
-		".b add os",
-		".b list",
-		".b remove dbms",
-		".b list",
-		".b add maths extra words should be ignored",
-		".b list",
-	}
+	tests := []string{}
 
 	for _, cmd := range tests {
 		resp := bot.Handle(cmd, cfg.Prefix, s)
