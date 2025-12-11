@@ -27,7 +27,7 @@ func main() {
 		Str("prefix", cfg.Prefix).
 		Msg("config loaded")
 
-	s := store.New()
+	s := store.NewMemStore()
 
 	tests := []string{
 		// -----------------

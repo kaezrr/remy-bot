@@ -23,7 +23,7 @@ const HELP = `Usage:
 
 Use <cmd> to list further commands`
 
-func Handle(input string, prefix string, s *store.Store) Response {
+func Handle(input string, prefix string, s *store.MemStore) Response {
 	after, found := strings.CutPrefix(input, prefix)
 
 	if !found {
@@ -73,7 +73,7 @@ const BASKET_HELP = `Usage:
 .b add <name>      add a new basket
 .b del <name>      remove a basket`
 
-func basketHandler(parts []string, s *store.Store) (string, error) {
+func basketHandler(parts []string, s store.Store) (string, error) {
 	if len(parts) == 0 {
 		return BASKET_HELP, nil
 	}
@@ -127,7 +127,7 @@ const DEADLINE_HELP = `Usage:
 .d add <date> <time> <title>  add a new deadline
 `
 
-func deadlineHandler(parts []string, s *store.Store) (string, error) {
+func deadlineHandler(parts []string, s store.Store) (string, error) {
 	if len(parts) == 0 {
 		return DEADLINE_HELP, nil
 	}
@@ -202,7 +202,7 @@ const PIN_HELP = `Usage:
 .p add <basket> <content>     add a new pin
 .p del <basket> <id>          remove a pin from a basket`
 
-func pinHandler(parts []string, s *store.Store) (string, error) {
+func pinHandler(parts []string, s store.Store) (string, error) {
 	if len(parts) == 0 {
 		return PIN_HELP, nil
 	}

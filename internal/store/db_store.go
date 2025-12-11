@@ -52,3 +52,5 @@ func NewDBStore(path string) (*DBStore, error) {
 
 	return &DBStore{db: db}, nil
 }
+
+// var _ Store = (*DBStore)(nil)
