@@ -1,0 +1,4 @@
+bin/
+session/
+*.db
+go.work
