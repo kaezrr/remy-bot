@@ -25,6 +25,15 @@ import (
 
 type BotHandleFunc func(input, prefix string, s store.Store) bot.Response
 
+func sendGroupMessage(client *whatsmeow.Client, jid waTypes.JID, text string) {
+	waMsg := &waE2E.Message{
+		Conversation: proto.String(text),
+	}
+	if _, err := client.SendMessage(context.Background(), jid, waMsg); err != nil {
+		log.Error().Err(err).Str("jid", jid.String()).Msg("failed to send group message")
+	}
+}
+
 func Run(cfg *config.Config, s store.Store, handle BotHandleFunc) error {
 	container, err := waStore.New(
 		context.Background(),
@@ -109,6 +118,8 @@ func Run(cfg *config.Config, s store.Store, handle BotHandleFunc) error {
 		Str("group_jid", targetJID.String()).
 		Msg("target WhatsApp group resolved")
 
+	sendGroupMessage(client, targetJID, "Remy has entered the chat. Type .h for help!")
+
 	client.AddEventHandler(func(evt any) {
 		switch v := evt.(type) {
 		case *events.Message:
@@ -119,6 +130,8 @@ func Run(cfg *config.Config, s store.Store, handle BotHandleFunc) error {
 	sigC := make(chan os.Signal, 1)
 	signal.Notify(sigC, os.Interrupt, syscall.SIGTERM)
 	<-sigC
+
+	sendGroupMessage(client, targetJID, "Remy left the chat. See you soon!")
 
 	log.Info().Msg("shutting down Remy, goodbye...")
 
@@ -155,11 +168,5 @@ func handleIncomingMessage(
 		return
 	}
 
-	waMsg := &waE2E.Message{
-		Conversation: proto.String(resp.Text),
-	}
-
-	if _, err := client.SendMessage(context.Background(), targetJID, waMsg); err != nil {
-		log.Error().Err(err).Msg("failed to send reply")
-	}
+	sendGroupMessage(client, targetJID, resp.Text)
 }
