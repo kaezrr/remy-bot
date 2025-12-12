@@ -17,6 +17,11 @@ func main() {
 
 	log.Info().Msg("Remy starting up...")
 
+	// Create session directory and data directory
+	if err := os.MkdirAll("data/session", 0755); err != nil {
+		log.Fatal().Err(err).Msg("failed to create session directory")
+	}
+
 	cfg, err := config.Load("config.json")
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to load file")
