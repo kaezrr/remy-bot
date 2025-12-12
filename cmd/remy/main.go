@@ -17,7 +17,7 @@ func main() {
 
 	log.Info().Msg("Remy starting up...")
 
-	cfg, err := config.Load("config/config.json")
+	cfg, err := config.Load("config.json")
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to load file")
 	}

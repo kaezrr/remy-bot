@@ -2,5 +2,5 @@
   "database": "data/remy.db",
   "session_dir": "data/session",
   "prefix": ".",
-  "target_group_name": "Test Group"
+  "target_group_name": ""
 }
