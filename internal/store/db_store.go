@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/rs/zerolog/log"
 	_ "modernc.org/sqlite"
 )
 
@@ -52,6 +53,8 @@ func NewDBStore(path string) (*DBStore, error) {
 	mustExec(db, CREATE_DEADLINES_TABLE)
 	mustExec(db, CREATE_BASKETS_TABLE)
 	mustExec(db, CREATE_PINS_TABLE)
+
+	log.Info().Msg("connected to SQLite database!")
 
 	return &DBStore{db: db}, nil
 }

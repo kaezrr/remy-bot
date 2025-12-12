@@ -6,9 +6,10 @@ import (
 )
 
 type Config struct {
-	Database   string `json:"database"`
-	SessionDir string `json:"session_dir"`
-	Prefix     string `json:"prefix"`
+	Database        string `json:"database"`
+	SessionDir      string `json:"session_dir"`
+	Prefix          string `json:"prefix"`
+	TargetGroupName string `json:"target_group_name"`
 }
 
 func Load(path string) (*Config, error) {
