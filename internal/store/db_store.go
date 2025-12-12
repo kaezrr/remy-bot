@@ -312,16 +312,16 @@ func (dbs *DBStore) DeletePin(ctx context.Context, basketName string, id int) er
 }
 
 func (dbs *DBStore) DeleteExpiredDeadlines(ctx context.Context) ([]*Deadline, error) {
-	nowFormatted := time.Now().Format("2006-01-02 15:04")
+	nowFormattedUTC := time.Now().UTC().Format(TimeStorageFormat)
 
 	const selectQuery = `
-		SELECT id, title, datetime, reminder_count
-		FROM deadlines
-		WHERE datetime < ?;`
+        SELECT id, title, datetime, reminder_count
+        FROM deadlines
+        WHERE datetime < ?;`
 
 	const deleteQuery = `
-		DELETE FROM deadlines
-		WHERE datetime < ?;`
+        DELETE FROM deadlines
+        WHERE datetime < ?;`
 
 	tx, err := dbs.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -329,7 +329,7 @@ func (dbs *DBStore) DeleteExpiredDeadlines(ctx context.Context) ([]*Deadline, er
 	}
 	defer tx.Rollback()
 
-	rows, err := tx.QueryContext(ctx, selectQuery, nowFormatted)
+	rows, err := tx.QueryContext(ctx, selectQuery, nowFormattedUTC)
 	if err != nil {
 		return nil, err
 	}
@@ -348,7 +348,7 @@ func (dbs *DBStore) DeleteExpiredDeadlines(ctx context.Context) ([]*Deadline, er
 		return nil, err
 	}
 
-	if _, err := tx.ExecContext(ctx, deleteQuery, nowFormatted); err != nil {
+	if _, err := tx.ExecContext(ctx, deleteQuery, nowFormattedUTC); err != nil {
 		return nil, err
 	}
 

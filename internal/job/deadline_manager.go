@@ -3,7 +3,6 @@ package job
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/kaezrr/remy-bot/internal/store"
@@ -70,7 +69,7 @@ func (dm *DeadlineManager) runChecks(ctx context.Context) {
 
 	for _, d := range deletedDeadlines {
 		message := fmt.Sprintf(
-			"*Deadline Completed/Expired!*\n\nTask: *%s*\nWas due on: %s\n",
+			"*Deadline Completed/Expired!*\nTask: *%s*\nWas due on: %s\n",
 			d.Title,
 			d.Time().Format(store.DisplayFormat),
 		)
@@ -129,42 +128,23 @@ func formatDuration(d time.Duration) string {
 
 	d = d.Round(time.Minute)
 
-	totalMinutes := int(d.Minutes())
-
-	minutesInHour := 60
-	hoursInDay := 24
-	minutesInDay := minutesInHour * hoursInDay
-
-	days := totalMinutes / minutesInDay
-	remainingMinutes := totalMinutes % minutesInDay
-
-	hours := remainingMinutes / minutesInHour
-
-	minutes := remainingMinutes % minutesInHour
-
-	parts := []string{}
-
-	if days > 0 {
-		parts = append(parts, fmt.Sprintf("%d day%s", days, pluralize(days)))
+	days := d / (24 * time.Hour)
+	if days >= 1 {
+		daysInt := int(days)
+		return fmt.Sprintf("%d day%s", daysInt, pluralize(daysInt))
 	}
 
-	if hours > 0 {
-		parts = append(parts, fmt.Sprintf("%d hour%s", hours, pluralize(hours)))
+	hours := d / time.Hour
+	if hours >= 1 {
+		hoursInt := int(hours)
+		return fmt.Sprintf("%d hour%s", hoursInt, pluralize(hoursInt))
 	}
 
-	if minutes > 0 || (days == 0 && hours == 0 && totalMinutes > 0) {
-		if minutes == 0 && totalMinutes > 0 {
-			minutes = 1
-		}
-
-		if minutes > 0 {
-			parts = append(parts, fmt.Sprintf("%d minute%s", minutes, pluralize(minutes)))
-		}
+	minutes := d / time.Minute
+	if minutes >= 1 {
+		minutesInt := int(minutes)
+		return fmt.Sprintf("%d minute%s", minutesInt, pluralize(minutesInt))
 	}
 
-	if len(parts) == 0 && totalMinutes > 0 {
-		return "less than a minute"
-	}
-
-	return strings.Join(parts, ", ")
+	return "less than a minute"
 }
