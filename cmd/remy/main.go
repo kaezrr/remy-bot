@@ -32,9 +32,6 @@ func main() {
 		log.Fatal().Err(err).Msg("failed to start database")
 	}
 
-	// In memory store for testing
-	// s := store.NewMemStore()
-
 	if err := wa.Run(cfg, s, bot.Handle); err != nil {
 		log.Fatal().Err(err).Msg("whatsapp runtime error")
 	}

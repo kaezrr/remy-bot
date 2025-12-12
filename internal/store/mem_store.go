@@ -4,30 +4,7 @@ import (
 	"errors"
 	"sort"
 	"strings"
-	"time"
 )
-
-type Deadline struct {
-	ID       int
-	Title    string
-	DateTime string
-}
-
-func (d Deadline) Time() time.Time {
-	dt, _ := time.Parse("2006-01-02 15:04", d.DateTime)
-	return dt
-}
-
-type Pin struct {
-	ID      int
-	Content string
-}
-
-type Basket struct {
-	Name      string
-	Pins      []Pin
-	NextPinID int
-}
 
 type MemStore struct {
 	deadlines      []Deadline
@@ -161,4 +138,4 @@ func (s *MemStore) DeletePin(basketName string, id int) error {
 	return errors.New("pin does not exist")
 }
 
-var _ Store = (*MemStore)(nil)
+// var _ Store = (*MemStore)(nil)

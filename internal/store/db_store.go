@@ -1,9 +1,11 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	_ "modernc.org/sqlite"
@@ -17,7 +19,8 @@ const CREATE_DEADLINES_TABLE = `
 CREATE TABLE IF NOT EXISTS deadlines(
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	title TEXT NOT NULL,
-	datetime TEXT NOT NULL
+	datetime TEXT NOT NULL,
+	reminder_count INTEGER DEFAULT 0 NOT NULL
 );`
 
 const CREATE_BASKETS_TABLE = `
@@ -59,12 +62,12 @@ func NewDBStore(path string) (*DBStore, error) {
 	return &DBStore{db: db}, nil
 }
 
-func (dbs *DBStore) AddDeadline(title string, datetime string) (Deadline, error) {
+func (dbs *DBStore) AddDeadline(ctx context.Context, title string, datetime string) (Deadline, error) {
 	const query = `
-		INSERT INTO deadlines (title, datetime)
-		VALUES (?, ?);`
+		INSERT INTO deadlines (title, datetime, reminder_count)
+		VALUES (?, ?, 0);`
 
-	res, err := dbs.db.Exec(query, title, datetime)
+	res, err := dbs.db.ExecContext(ctx, query, title, datetime)
 	if err != nil {
 		return Deadline{}, err
 	}
@@ -75,21 +78,22 @@ func (dbs *DBStore) AddDeadline(title string, datetime string) (Deadline, error)
 	}
 
 	d := Deadline{
-		ID:       int(id),
-		Title:    title,
-		DateTime: datetime,
+		ID:            int(id),
+		Title:         title,
+		DateTime:      datetime,
+		ReminderCount: 0, // Set in the struct
 	}
 
 	return d, nil
 }
 
-func (dbs *DBStore) ListDeadlines() ([]Deadline, error) {
+func (dbs *DBStore) ListDeadlines(ctx context.Context) ([]Deadline, error) {
 	const query = `
-		SELECT id, title, datetime
+		SELECT id, title, datetime, reminder_count
 		FROM deadlines
 		ORDER BY datetime ASC;`
 
-	rows, err := dbs.db.Query(query)
+	rows, err := dbs.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +104,7 @@ func (dbs *DBStore) ListDeadlines() ([]Deadline, error) {
 	for rows.Next() {
 		var d Deadline
 
-		if err := rows.Scan(&d.ID, &d.Title, &d.DateTime); err != nil {
+		if err := rows.Scan(&d.ID, &d.Title, &d.DateTime, &d.ReminderCount); err != nil {
 			return nil, err
 		}
 
@@ -114,12 +118,12 @@ func (dbs *DBStore) ListDeadlines() ([]Deadline, error) {
 	return deadlines, nil
 }
 
-func (dbs *DBStore) DeleteDeadline(id int) error {
+func (dbs *DBStore) DeleteDeadline(ctx context.Context, id int) error {
 	const query = `
 		DELETE FROM deadlines
 		WHERE id = ?;`
 
-	res, err := dbs.db.Exec(query, id)
+	res, err := dbs.db.ExecContext(ctx, query, id)
 	if err != nil {
 		return err
 	}
@@ -136,12 +140,12 @@ func (dbs *DBStore) DeleteDeadline(id int) error {
 	return nil
 }
 
-func (dbs *DBStore) AddBasket(name string) error {
+func (dbs *DBStore) AddBasket(ctx context.Context, name string) error {
 	const query = `
 		INSERT INTO baskets (name)
 		VALUES (?);`
 
-	_, err := dbs.db.Exec(query, strings.ToLower(name))
+	_, err := dbs.db.ExecContext(ctx, query, strings.ToLower(name))
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			return errors.New("basket already exists")
@@ -152,12 +156,12 @@ func (dbs *DBStore) AddBasket(name string) error {
 	return nil
 }
 
-func (dbs *DBStore) ListBaskets() ([]string, error) {
+func (dbs *DBStore) ListBaskets(ctx context.Context) ([]string, error) {
 	const query = `
 		SELECT name FROM baskets
 		ORDER BY name ASC;`
 
-	rows, err := dbs.db.Query(query)
+	rows, err := dbs.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -182,12 +186,12 @@ func (dbs *DBStore) ListBaskets() ([]string, error) {
 	return baskets, nil
 }
 
-func (dbs *DBStore) DeleteBasket(name string) error {
+func (dbs *DBStore) DeleteBasket(ctx context.Context, name string) error {
 	const query = `
 		DELETE FROM baskets
 		WHERE name = ?;`
 
-	res, err := dbs.db.Exec(query, strings.ToLower(name))
+	res, err := dbs.db.ExecContext(ctx, query, strings.ToLower(name))
 	if err != nil {
 		return err
 	}
@@ -204,7 +208,7 @@ func (dbs *DBStore) DeleteBasket(name string) error {
 	return nil
 }
 
-func (dbs *DBStore) AddPin(basketName string, content string) (Pin, error) {
+func (dbs *DBStore) AddPin(ctx context.Context, basketName string, content string) (Pin, error) {
 	const query1 = `SELECT id FROM baskets WHERE name = ?`
 	const query2 = `
 		INSERT INTO pins (content, basket_id)
@@ -220,7 +224,7 @@ func (dbs *DBStore) AddPin(basketName string, content string) (Pin, error) {
 		return Pin{}, err
 	}
 
-	res, err := dbs.db.Exec(query2, content, basketID)
+	res, err := dbs.db.ExecContext(ctx, query2, content, basketID)
 	if err != nil {
 		return Pin{}, err
 	}
@@ -237,7 +241,7 @@ func (dbs *DBStore) AddPin(basketName string, content string) (Pin, error) {
 
 	return p, nil
 }
-func (dbs *DBStore) ListPins(basketName string) ([]Pin, error) {
+func (dbs *DBStore) ListPins(ctx context.Context, basketName string) ([]Pin, error) {
 	const query1 = "SELECT id FROM baskets WHERE name = ?"
 	const query2 = "SELECT id, content FROM pins WHERE basket_id = ? ORDER BY id ASC"
 
@@ -250,7 +254,7 @@ func (dbs *DBStore) ListPins(basketName string) ([]Pin, error) {
 		return nil, err
 	}
 
-	rows, err := dbs.db.Query(query2, basketID)
+	rows, err := dbs.db.QueryContext(ctx, query2, basketID)
 	if err != nil {
 		return nil, err
 	}
@@ -275,7 +279,7 @@ func (dbs *DBStore) ListPins(basketName string) ([]Pin, error) {
 	return pins, nil
 }
 
-func (dbs *DBStore) DeletePin(basketName string, id int) error {
+func (dbs *DBStore) DeletePin(ctx context.Context, basketName string, id int) error {
 	const query1 = `SELECT id FROM baskets WHERE name = ?`
 	const query2 = `
 		DELETE FROM pins 
@@ -290,7 +294,7 @@ func (dbs *DBStore) DeletePin(basketName string, id int) error {
 		return err
 	}
 
-	res, err := dbs.db.Exec(query2, basketID, id)
+	res, err := dbs.db.ExecContext(ctx, query2, basketID, id)
 	if err != nil {
 		return err
 	}
@@ -302,6 +306,113 @@ func (dbs *DBStore) DeletePin(basketName string, id int) error {
 
 	if affected == 0 {
 		return errors.New("pin does not exist")
+	}
+
+	return nil
+}
+
+func (dbs *DBStore) DeleteExpiredDeadlines(ctx context.Context) ([]*Deadline, error) {
+	nowFormatted := time.Now().Format("2006-01-02 15:04")
+
+	const selectQuery = `
+		SELECT id, title, datetime, reminder_count
+		FROM deadlines
+		WHERE datetime < ?;`
+
+	const deleteQuery = `
+		DELETE FROM deadlines
+		WHERE datetime < ?;`
+
+	tx, err := dbs.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	rows, err := tx.QueryContext(ctx, selectQuery, nowFormatted)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	deletedDeadlines := []*Deadline{}
+	for rows.Next() {
+		d := &Deadline{}
+		if err := rows.Scan(&d.ID, &d.Title, &d.DateTime, &d.ReminderCount); err != nil {
+			return nil, err
+		}
+		deletedDeadlines = append(deletedDeadlines, d)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if _, err := tx.ExecContext(ctx, deleteQuery, nowFormatted); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return deletedDeadlines, nil
+}
+
+func (dbs *DBStore) GetAllActiveDeadlines(ctx context.Context) ([]*Deadline, error) {
+	nowFormatted := time.Now().Format("2006-01-02 15:04")
+	const maxReminderCount = 5
+
+	const query = `
+		SELECT id, title, datetime, reminder_count
+		FROM deadlines
+		WHERE datetime > ?
+		  AND reminder_count < ?
+		ORDER BY datetime ASC;`
+
+	rows, err := dbs.db.QueryContext(ctx, query, nowFormatted, maxReminderCount)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	deadlines := []*Deadline{}
+
+	for rows.Next() {
+		d := &Deadline{}
+
+		if err := rows.Scan(&d.ID, &d.Title, &d.DateTime, &d.ReminderCount); err != nil {
+			return nil, err
+		}
+
+		deadlines = append(deadlines, d)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return deadlines, nil
+}
+
+func (dbs *DBStore) UpdateReminderState(ctx context.Context, id int, newCount int) error {
+	const query = `
+		UPDATE deadlines
+		SET reminder_count = ?
+		WHERE id = ?;`
+
+	res, err := dbs.db.ExecContext(ctx, query, newCount, id)
+	if err != nil {
+		return err
+	}
+
+	count, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if count == 0 {
+		return errors.New("deadline not found for update")
 	}
 
 	return nil

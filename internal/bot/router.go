@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -23,7 +24,7 @@ const HELP = `Usage:
 
 Use <cmd> to list further commands`
 
-func Handle(input string, prefix string, s store.Store) Response {
+func Handle(ctx context.Context, input string, prefix string, s store.Store) Response {
 	after, found := strings.CutPrefix(input, prefix)
 
 	if !found {
@@ -38,7 +39,7 @@ func Handle(input string, prefix string, s store.Store) Response {
 
 	switch parts[0] {
 	case "d":
-		result, err := deadlineHandler(parts[1:], s)
+		result, err := deadlineHandler(ctx, parts[1:], s)
 		if err != nil {
 			log.Error().Err(err).Msg("deadline handler error")
 			return Response{Text: err.Error()}
@@ -46,7 +47,7 @@ func Handle(input string, prefix string, s store.Store) Response {
 		return Response{Text: result}
 
 	case "b":
-		result, err := basketHandler(parts[1:], s)
+		result, err := basketHandler(ctx, parts[1:], s)
 		if err != nil {
 			log.Error().Err(err).Msg("basket handler error")
 			return Response{Text: err.Error()}
@@ -54,7 +55,7 @@ func Handle(input string, prefix string, s store.Store) Response {
 		return Response{Text: result}
 
 	case "p":
-		result, err := pinHandler(parts[1:], s)
+		result, err := pinHandler(ctx, parts[1:], s)
 		if err != nil {
 			log.Error().Err(err).Msg("pin handler error")
 			return Response{Text: err.Error()}
@@ -73,7 +74,7 @@ const BASKET_HELP = `Usage:
 .b add <name>      add a new basket
 .b del <name>      remove a basket`
 
-func basketHandler(parts []string, s store.Store) (string, error) {
+func basketHandler(ctx context.Context, parts []string, s store.Store) (string, error) {
 	if len(parts) == 0 {
 		return BASKET_HELP, nil
 	}
@@ -86,14 +87,14 @@ func basketHandler(parts []string, s store.Store) (string, error) {
 		}
 		name := parts[1]
 
-		if err := s.AddBasket(name); err != nil {
+		if err := s.AddBasket(ctx, name); err != nil {
 			return "", err
 		}
 
 		return "basket created successfully", nil
 
 	case "list":
-		baskets, err := s.ListBaskets()
+		baskets, err := s.ListBaskets(ctx)
 
 		if err != nil {
 			return "", err
@@ -116,7 +117,7 @@ func basketHandler(parts []string, s store.Store) (string, error) {
 		}
 		name := parts[1]
 
-		if err := s.DeleteBasket(name); err != nil {
+		if err := s.DeleteBasket(ctx, name); err != nil {
 			return "", err
 		}
 
@@ -132,14 +133,14 @@ const DEADLINE_HELP = `Usage:
 .d add <date> <time> <title>  add a new deadline
 `
 
-func deadlineHandler(parts []string, s store.Store) (string, error) {
+func deadlineHandler(ctx context.Context, parts []string, s store.Store) (string, error) {
 	if len(parts) == 0 {
 		return DEADLINE_HELP, nil
 	}
 
 	switch parts[0] {
 	case "list":
-		deadlines, err := s.ListDeadlines()
+		deadlines, err := s.ListDeadlines(ctx)
 
 		if err != nil {
 			return "", err
@@ -151,7 +152,8 @@ func deadlineHandler(parts []string, s store.Store) (string, error) {
 
 		out := "upcoming deadlines:\n"
 		for _, d := range deadlines {
-			out += fmt.Sprintf("%d. %s (%s)\n", d.ID, d.Title, d.DateTime)
+			localTime := d.Time().Format(store.DisplayFormat)
+			out += fmt.Sprintf("%d. %s (%s)\n", d.ID, d.Title, localTime)
 		}
 
 		return out, nil
@@ -172,23 +174,26 @@ func deadlineHandler(parts []string, s store.Store) (string, error) {
 		date := parts[1]
 		timeStr := parts[2]
 
-		if _, err := time.Parse("2006-01-02", date); err != nil {
-			return "", errors.New("invalid date, use YYYY-MM-DD")
+		inputTimeStr := date + " " + timeStr
+
+		const InputFormat = "2006-01-02 15:04"
+
+		localDeadlineTime, err := time.ParseInLocation(InputFormat, inputTimeStr, time.Local)
+
+		if err != nil {
+			return "", errors.New("invalid date/time format. Use YYYY-MM-DD HH:MM")
 		}
 
-		if _, err := time.Parse("15:04", timeStr); err != nil {
-			return "", errors.New("invalid time, use HH:MM")
-		}
-
+		utcTimeStr := localDeadlineTime.UTC().Format(store.TimeStorageFormat)
 		title := strings.Join(parts[3:], " ")
 
-		d, err := s.AddDeadline(title, date+" "+timeStr)
+		d, err := s.AddDeadline(ctx, title, utcTimeStr)
 
 		if err != nil {
 			return "", err
 		}
 
-		return fmt.Sprintf("deadline #%d added: %s (%s)", d.ID, d.Title, d.DateTime), nil
+		return fmt.Sprintf("deadline #%d added: %s (%s)", d.ID, d.Title, d.Time().Format(store.DisplayFormat)), nil
 
 	case "del":
 		if len(parts) < 2 {
@@ -201,7 +206,7 @@ func deadlineHandler(parts []string, s store.Store) (string, error) {
 			return "", errors.New("id must be an integer")
 		}
 
-		if err = s.DeleteDeadline(id); err != nil {
+		if err = s.DeleteDeadline(ctx, id); err != nil {
 			return "", err
 		}
 
@@ -216,7 +221,7 @@ const PIN_HELP = `Usage:
 .p add <basket> <content>     add a new pin
 .p del <basket> <id>          remove a pin from a basket`
 
-func pinHandler(parts []string, s store.Store) (string, error) {
+func pinHandler(ctx context.Context, parts []string, s store.Store) (string, error) {
 	if len(parts) == 0 {
 		return PIN_HELP, nil
 	}
@@ -228,7 +233,7 @@ func pinHandler(parts []string, s store.Store) (string, error) {
 		}
 
 		name := parts[1]
-		pins, err := s.ListPins(name)
+		pins, err := s.ListPins(ctx, name)
 
 		if err != nil {
 			return "", err
@@ -256,7 +261,7 @@ func pinHandler(parts []string, s store.Store) (string, error) {
 
 		name := parts[1]
 		content := strings.Join(parts[2:], " ")
-		pin, err := s.AddPin(name, content)
+		pin, err := s.AddPin(ctx, name, content)
 
 		if err != nil {
 			return "", err
@@ -281,7 +286,7 @@ func pinHandler(parts []string, s store.Store) (string, error) {
 			return "", errors.New("id must be an integer")
 		}
 
-		if err = s.DeletePin(name, id); err != nil {
+		if err = s.DeletePin(ctx, name, id); err != nil {
 			return "", err
 		}
 

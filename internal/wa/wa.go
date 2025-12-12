@@ -10,6 +10,7 @@ import (
 
 	"github.com/kaezrr/remy-bot/internal/bot"
 	"github.com/kaezrr/remy-bot/internal/config"
+	"github.com/kaezrr/remy-bot/internal/job"
 	"github.com/kaezrr/remy-bot/internal/store"
 	"github.com/rs/zerolog/log"
 
@@ -23,7 +24,7 @@ import (
 	qrterminal "github.com/mdp/qrterminal/v3"
 )
 
-type BotHandleFunc func(input, prefix string, s store.Store) bot.Response
+type BotHandleFunc func(ctx context.Context, input, prefix string, s store.Store) bot.Response
 
 func sendGroupMessage(client *whatsmeow.Client, jid waTypes.JID, text string) {
 	waMsg := &waE2E.Message{
@@ -118,6 +119,16 @@ func Run(cfg *config.Config, s store.Store, handle BotHandleFunc) error {
 		Str("group_jid", targetJID.String()).
 		Msg("target WhatsApp group resolved")
 
+	ctx, cancel := context.WithCancel(context.Background())
+
+	manager := job.DeadlineManager{
+		Client:    client,
+		Store:     s,
+		TargetJID: targetJID,
+	}
+
+	go manager.Start(ctx)
+
 	sendGroupMessage(client, targetJID, "Remy has entered the chat. Type .h for help!")
 
 	client.AddEventHandler(func(evt any) {
@@ -130,6 +141,9 @@ func Run(cfg *config.Config, s store.Store, handle BotHandleFunc) error {
 	sigC := make(chan os.Signal, 1)
 	signal.Notify(sigC, os.Interrupt, syscall.SIGTERM)
 	<-sigC
+
+	// Shutdown deadline manager
+	cancel()
 
 	sendGroupMessage(client, targetJID, "Remy left the chat. See you soon!")
 
@@ -163,7 +177,10 @@ func handleIncomingMessage(
 		return
 	}
 
-	resp := handle(text, cfg.Prefix, s)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	resp := handle(ctx, text, cfg.Prefix, s)
 	if resp.Text == "" {
 		return
 	}
