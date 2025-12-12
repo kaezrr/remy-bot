@@ -1,0 +1,14 @@
+services:
+  remy-bot:
+    image: remy-bot:latest
+
+    build: .
+
+    restart: unless-stopped
+
+    volumes:
+      - remy_data:/app/data
+      - ./config.json:/app/config.json
+
+volumes:
+  remy_data:

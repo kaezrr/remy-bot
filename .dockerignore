@@ -1,0 +1,8 @@
+.git
+.gitignore
+
+bin/
+data/
+*.exe
+*.darwin
+*.linux
