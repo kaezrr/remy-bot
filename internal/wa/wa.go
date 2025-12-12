@@ -38,7 +38,7 @@ func Run(cfg *config.Config, s store.Store, handle BotHandleFunc) error {
 	container, err := waStore.New(
 		context.Background(),
 		"sqlite",
-		"file:"+cfg.SessionDir+"/whatsmeow.db?_pragma=foreign_keys(1)",
+		"file:"+cfg.SessionDir+"/whatsmeow.db?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)",
 		nil,
 	)
 	if err != nil {
