@@ -27,7 +27,11 @@ func main() {
 		Str("prefix", cfg.Prefix).
 		Msg("config loaded")
 
-	s := store.NewMemStore()
+	s, err := store.NewDBStore(cfg.Database)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to start database")
+	}
+	log.Info().Msg("connected to SQLite database")
 
 	tests := []string{
 		// -----------------
