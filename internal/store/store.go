@@ -8,10 +8,11 @@ import (
 const DisplayFormat = "Mon, Jan 2 at 3:04 PM"
 
 type Deadline struct {
-	ID            int
-	Title         string
-	DueAt         time.Time
-	ReminderCount int
+	ID              int
+	Title           string
+	DueAt           time.Time
+	NextReminder    time.Time
+	NextRemindIndex int
 }
 
 type Pin struct {
@@ -29,7 +30,9 @@ type Store interface {
 	AddDeadline(ctx context.Context, title string, duaAt time.Time) (Deadline, error)
 	ListDeadlines(ctx context.Context) ([]Deadline, error)
 	DeleteDeadline(ctx context.Context, id int) error
-	UpdateReminderState(ctx context.Context, id int, newCount int) error
+
+	ListDueDeadlines(ctx context.Context, now time.Time) ([]Deadline, error)
+	UpdateNextReminder(ctx context.Context, id int, nextTime time.Time, nextIndex int) error
 
 	AddBasket(ctx context.Context, name string) error
 	ListBaskets(ctx context.Context) ([]string, error)

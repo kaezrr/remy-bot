@@ -17,9 +17,19 @@ const CREATE_DEADLINES_TABLE = `
 CREATE TABLE IF NOT EXISTS deadlines(
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	title TEXT NOT NULL,
-	due_at TEXT NOT NULL,
-	reminder_count INTEGER DEFAULT 0 NOT NULL
+	due_at TEXT NOT NULL,              -- RFC3339 UTC
+	next_reminder TEXT NOT NULL,       -- RFC3339 UTC
+	next_remind_index INTEGER NOT NULL,
+	CHECK (
+		(next_remind_index >= 0)
+		OR
+		(next_remind_index = -1 AND next_reminder = due_at)
+	)
 );`
+
+const CREATE_DEADLINES_INDEX = `
+CREATE INDEX IF NOT EXISTS idx_deadlines_next_reminder
+ON deadlines(next_reminder);`
 
 const CREATE_BASKETS_TABLE = `
 CREATE TABLE IF NOT EXISTS baskets(
@@ -54,6 +64,7 @@ func NewDBStore(path string, timezone *time.Location) (*DBStore, error) {
 	mustExec(db, CREATE_DEADLINES_TABLE)
 	mustExec(db, CREATE_BASKETS_TABLE)
 	mustExec(db, CREATE_PINS_TABLE)
+	mustExec(db, CREATE_DEADLINES_INDEX)
 
 	log.Info().Msg("connected to SQLite database!")
 

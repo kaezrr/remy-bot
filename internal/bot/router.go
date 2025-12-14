@@ -82,9 +82,9 @@ func Handle(ctx context.Context, input string, prefix string, s store.Store) Res
 }
 
 const BASKET_HELP = `Usage:
-.b get             list all baskets
-.b add [name]      add a new basket
-.b del [name]      remove a basket`
+.b get  list all baskets
+.b add [name]   add a new basket
+.b del [name]   remove a basket`
 
 func basketHandler(ctx context.Context, parts []string, s store.Store) (string, error) {
 	if len(parts) == 0 {
@@ -116,12 +116,13 @@ func basketHandler(ctx context.Context, parts []string, s store.Store) (string, 
 			return "there are no baskets", nil
 		}
 
-		out := "list of baskets:\n"
+		var out strings.Builder
+		out.WriteString("list of baskets:\n")
 		for _, b := range baskets {
-			out += "- " + b + "\n"
+			out.WriteString("- " + b + "\n")
 		}
 
-		return out, nil
+		return out.String(), nil
 
 	case "del":
 		if len(parts) < 2 {
@@ -140,9 +141,9 @@ func basketHandler(ctx context.Context, parts []string, s store.Store) (string, 
 }
 
 const DEADLINE_HELP = `Usage:
-.d get                        list all deadlines
-.d del [id]                   remove a deadline
-.d add [date] [time] [title]  add a new deadline`
+.d get   list all deadlines
+.d del [id]   remove a deadline
+.d add [date] [time] [title]   add a new deadline`
 
 func deadlineHandler(ctx context.Context, parts []string, s store.Store) (string, error) {
 	if len(parts) == 0 {
@@ -162,13 +163,14 @@ func deadlineHandler(ctx context.Context, parts []string, s store.Store) (string
 		}
 
 		tz := s.Timezone()
-		out := "upcoming deadlines:\n"
+		var out strings.Builder
+		out.WriteString("upcoming deadlines:\n")
 		for _, d := range deadlines {
 			localTime := d.DueAt.In(tz).Format(store.DisplayFormat)
-			out += fmt.Sprintf("%d. %s (%s)\n", d.ID, d.Title, localTime)
+			fmt.Fprintf(&out, "%d. %s (%s)\n", d.ID, d.Title, localTime)
 		}
 
-		return out, nil
+		return out.String(), nil
 
 	case "add":
 		if len(parts) < 2 {
@@ -240,9 +242,9 @@ func deadlineHandler(ctx context.Context, parts []string, s store.Store) (string
 }
 
 const PIN_HELP = `Usage:
-.p get [basket]            list all pins in a basket
-.p add [basket] [content]  add a new pin
-.p del [id]                remove a pin from a basket`
+.p get [basket]   list all pins in a basket
+.p add [basket] [content]   add a new pin
+.p del [id]   remove a pin from a basket`
 
 func pinHandler(ctx context.Context, parts []string, s store.Store) (string, error) {
 	if len(parts) == 0 {
@@ -266,12 +268,13 @@ func pinHandler(ctx context.Context, parts []string, s store.Store) (string, err
 			return "no pins in basket " + name, nil
 		}
 
-		out := name + " pins:\n"
+		var out strings.Builder
+		out.WriteString(name + " pins:\n")
 		for _, p := range pins {
-			out += fmt.Sprintf("%d. %s\n", p.ID, p.Content)
+			fmt.Fprintf(&out, "%d. %s\n", p.ID, p.Content)
 		}
 
-		return out, nil
+		return out.String(), nil
 
 	case "add":
 		if len(parts) < 2 {
