@@ -12,7 +12,7 @@ RUN CGO_ENABLED=0 go build -o /usr/local/bin/remy ./cmd/remy
 
 FROM alpine:3.20
 
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates tzdata
 
 WORKDIR /app
 
