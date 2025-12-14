@@ -3,6 +3,7 @@ package job
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/kaezrr/remy-bot/internal/store"
@@ -14,13 +15,31 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// ReminderIntervals defines the schedule (time BEFORE the deadline) for reminders.
-var ReminderIntervals = []time.Duration{
-	48 * time.Hour, // Index 0: 2 days before
-	24 * time.Hour, // Index 1: 1 day before
-	12 * time.Hour, // Index 2: 12 hours before
-	6 * time.Hour,  // Index 3: 6 hours before
-	3 * time.Hour,  // Index 4: 3 hours before
+const (
+	Reminder48h = 48 * time.Hour
+	Reminder24h = 24 * time.Hour
+	Reminder12h = 12 * time.Hour
+	Reminder6h  = 6 * time.Hour
+	Reminder3h  = 3 * time.Hour
+)
+
+const (
+	Flag48h = 1 << iota // 1 (Binary 00001)
+	Flag24h             // 2 (Binary 00010)
+	Flag12h             // 4 (Binary 00100)
+	Flag6h              // 8 (Binary 01000)
+	Flag3h              // 16 (Binary 10000)
+)
+
+var reminderMap = []struct {
+	Duration time.Duration
+	Flag     int
+}{
+	{Duration: Reminder48h, Flag: Flag48h},
+	{Duration: Reminder24h, Flag: Flag24h},
+	{Duration: Reminder12h, Flag: Flag12h},
+	{Duration: Reminder6h, Flag: Flag6h},
+	{Duration: Reminder3h, Flag: Flag3h},
 }
 
 type DeadlineManager struct {
@@ -43,16 +62,17 @@ func sendGroupMessage(client *whatsmeow.Client, jid waTypes.JID, text string) {
 }
 
 func (dm *DeadlineManager) Start(ctx context.Context) {
-	ticker := time.NewTicker(30 * time.Minute)
+	ticker := time.NewTicker(10 * time.Minute)
 	defer ticker.Stop()
 
-	log.Info().Msg("Job: Deadline manager started, checking every 30 minutes.")
+	log.Info().Msg("Job: Deadline manager started, checking every 10 minutes.")
 
 	dm.runChecks(ctx) // Run checks immediately upon startup
 
 	for {
 		select {
 		case <-ticker.C:
+			log.Info().Msg("Job: Deadline manager checking now.")
 			dm.runChecks(ctx)
 		case <-ctx.Done():
 			log.Info().Msg("Job: Deadline manager shutting down.")
@@ -62,56 +82,78 @@ func (dm *DeadlineManager) Start(ctx context.Context) {
 }
 
 func (dm *DeadlineManager) runChecks(ctx context.Context) {
-	deletedDeadlines, err := dm.Store.DeleteExpiredDeadlines(ctx)
+	deadlines, err := dm.Store.ListDeadlines(ctx)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to clean up expired deadlines")
-	}
-
-	for _, d := range deletedDeadlines {
-		message := fmt.Sprintf(
-			"*Deadline Completed/Expired!*\nTask: *%s*\nWas due on: %s\n",
-			d.Title,
-			d.DueAt.Format(store.DisplayFormat),
-		)
-		sendGroupMessage(dm.Client, dm.TargetJID, message)
-	}
-
-	deadlines, err := dm.Store.GetAllActiveDeadlines(ctx)
-	if err != nil {
-		log.Error().Err(err).Msg("failed to find active deadlines")
+		log.Error().Err(err).Msg("Job: Failed to list deadlines for checks")
 		return
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
+	var wg sync.WaitGroup
+
 	for _, d := range deadlines {
-		deadlineTime := d.DueAt
+		timeRemaining := d.DueAt.Sub(now)
 
-		for i, interval := range ReminderIntervals {
-			reminderTime := deadlineTime.Add(-interval)
+		if timeRemaining <= 0 {
+			wg.Add(1)
+			go func(deadline store.Deadline) {
+				defer wg.Done()
 
-			if reminderTime.Before(now) && i >= d.ReminderCount {
+				if timeRemaining > -(10 * time.Minute) {
+					log.Info().Int("id", deadline.ID).Str("title", deadline.Title).Msg("Job: Triggering deadline expiry notification")
 
-				timeUntil := deadlineTime.Sub(now)
-				formattedTimeUntil := formatDuration(timeUntil)
-
-				message := fmt.Sprintf(
-					"*Deadline Alert!*\nTask: *%s*\nThis is due in *%s*!",
-					d.Title,
-					formattedTimeUntil,
-				)
-
-				sendGroupMessage(dm.Client, dm.TargetJID, message)
-
-				nextReminderCount := i + 1
-
-				if err := dm.Store.UpdateReminderState(ctx, d.ID, nextReminderCount); err != nil {
-					log.Error().Err(err).Int("id", d.ID).Msg("failed to update reminder state")
+					msg := fmt.Sprintf(
+						"*DEADLINE EXPIRED*\nThe deadline for *%s* has officially passed!\nIt was due at %s",
+						deadline.Title,
+						deadline.DueAt.In(dm.Store.Timezone()).Format(store.DisplayFormat),
+					)
+					sendGroupMessage(dm.Client, dm.TargetJID, msg)
+				} else {
+					log.Warn().Int("id", deadline.ID).Str("title", deadline.Title).Dur("passed", timeRemaining).Msg("Job: Deadline expired long ago, skipping notification.")
 				}
 
-				break
+				log.Info().Int("id", deadline.ID).Str("title", deadline.Title).Msg("Job: Deleting expired deadline")
+				if err := dm.Store.DeleteDeadline(ctx, deadline.ID); err != nil {
+					log.Error().Err(err).Int("id", deadline.ID).Msg("Job: Failed to delete expired deadline")
+				}
+			}(d)
+			continue
+		}
+
+		for _, rm := range reminderMap {
+			buffer := 10 * time.Minute
+
+			if timeRemaining <= rm.Duration+buffer && timeRemaining > rm.Duration-buffer {
+
+				if (d.ReminderCount & rm.Flag) == 0 {
+
+					log.Info().Int("id", d.ID).Str("title", d.Title).Dur("remaining", timeRemaining).Msg("Job: Triggering deadline reminder")
+
+					wg.Add(1)
+					go func(deadline store.Deadline, flag int) {
+						defer wg.Done()
+
+						// 1. Send Message
+						msg := fmt.Sprintf(
+							"*REMINDER* \nYour deadline for *%s* is approaching!\n\nTime remaining: *%s*",
+							deadline.Title,
+							formatDuration(rm.Duration),
+						)
+						sendGroupMessage(dm.Client, dm.TargetJID, msg)
+
+						newCount := deadline.ReminderCount | flag
+
+						if err := dm.Store.UpdateReminderState(ctx, deadline.ID, newCount); err != nil {
+							log.Error().Err(err).Int("id", deadline.ID).Msg("Job: Failed to update ReminderState after sending reminder")
+						}
+					}(d, rm.Flag)
+				}
 			}
 		}
 	}
+
+	wg.Wait()
+	log.Info().Msg("Job: Deadline check cycle finished.")
 }
 
 func pluralize(count int) string {

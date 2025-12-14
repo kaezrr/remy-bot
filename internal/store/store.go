@@ -29,9 +29,6 @@ type Store interface {
 	AddDeadline(ctx context.Context, title string, duaAt time.Time) (Deadline, error)
 	ListDeadlines(ctx context.Context) ([]Deadline, error)
 	DeleteDeadline(ctx context.Context, id int) error
-
-	DeleteExpiredDeadlines(ctx context.Context) ([]*Deadline, error)
-	GetAllActiveDeadlines(ctx context.Context) ([]*Deadline, error)
 	UpdateReminderState(ctx context.Context, id int, newCount int) error
 
 	AddBasket(ctx context.Context, name string) error
