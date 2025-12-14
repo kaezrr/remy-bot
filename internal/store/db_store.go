@@ -12,14 +12,15 @@ import (
 )
 
 type DBStore struct {
-	db *sql.DB
+	db       *sql.DB
+	timezone *time.Location
 }
 
 const CREATE_DEADLINES_TABLE = `
 CREATE TABLE IF NOT EXISTS deadlines(
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	title TEXT NOT NULL,
-	datetime TEXT NOT NULL,
+	due_at INTEGER NOT NULL,
 	reminder_count INTEGER DEFAULT 0 NOT NULL
 );`
 
@@ -44,7 +45,7 @@ func mustExec(db *sql.DB, query string) {
 	}
 }
 
-func NewDBStore(path string) (*DBStore, error) {
+func NewDBStore(path string, timezone *time.Location) (*DBStore, error) {
 	db, err := sql.Open("sqlite", path)
 
 	if err != nil {
@@ -59,15 +60,20 @@ func NewDBStore(path string) (*DBStore, error) {
 
 	log.Info().Msg("connected to SQLite database!")
 
-	return &DBStore{db: db}, nil
+	return &DBStore{db: db, timezone: timezone}, nil
 }
 
-func (dbs *DBStore) AddDeadline(ctx context.Context, title string, datetime string) (Deadline, error) {
+func (dbs *DBStore) Timezone() *time.Location {
+	return dbs.timezone
+}
+
+func (dbs *DBStore) AddDeadline(ctx context.Context, title string, dueAt time.Time) (Deadline, error) {
+	dueAt = dueAt.UTC()
 	const query = `
-		INSERT INTO deadlines (title, datetime, reminder_count)
+		INSERT INTO deadlines (title, due_at, reminder_count)
 		VALUES (?, ?, 0);`
 
-	res, err := dbs.db.ExecContext(ctx, query, title, datetime)
+	res, err := dbs.db.ExecContext(ctx, query, title, dueAt.Unix())
 	if err != nil {
 		return Deadline{}, err
 	}
@@ -80,7 +86,7 @@ func (dbs *DBStore) AddDeadline(ctx context.Context, title string, datetime stri
 	d := Deadline{
 		ID:            int(id),
 		Title:         title,
-		DateTime:      datetime,
+		DueAt:         dueAt,
 		ReminderCount: 0, // Set in the struct
 	}
 
@@ -89,9 +95,9 @@ func (dbs *DBStore) AddDeadline(ctx context.Context, title string, datetime stri
 
 func (dbs *DBStore) ListDeadlines(ctx context.Context) ([]Deadline, error) {
 	const query = `
-		SELECT id, title, datetime, reminder_count
+		SELECT id, title, due_at, reminder_count
 		FROM deadlines
-		ORDER BY datetime ASC;`
+		ORDER BY due_at ASC;`
 
 	rows, err := dbs.db.QueryContext(ctx, query)
 	if err != nil {
@@ -103,11 +109,13 @@ func (dbs *DBStore) ListDeadlines(ctx context.Context) ([]Deadline, error) {
 
 	for rows.Next() {
 		var d Deadline
+		var dueAt int64
 
-		if err := rows.Scan(&d.ID, &d.Title, &d.DateTime, &d.ReminderCount); err != nil {
+		if err := rows.Scan(&d.ID, &d.Title, &dueAt, &d.ReminderCount); err != nil {
 			return nil, err
 		}
 
+		d.DueAt = time.Unix(dueAt, 0).UTC()
 		deadlines = append(deadlines, d)
 	}
 
@@ -279,22 +287,12 @@ func (dbs *DBStore) ListPins(ctx context.Context, basketName string) ([]Pin, err
 	return pins, nil
 }
 
-func (dbs *DBStore) DeletePin(ctx context.Context, basketName string, id int) error {
-	const query1 = `SELECT id FROM baskets WHERE name = ?`
-	const query2 = `
+func (dbs *DBStore) DeletePin(ctx context.Context, id int) error {
+	const query = `
 		DELETE FROM pins 
-		WHERE basket_id = ? AND id = ?;
+		WHERE id = ?;
 	`
-	var basketID int
-	err := dbs.db.QueryRow(query1, strings.ToLower(basketName)).Scan(&basketID)
-	if err == sql.ErrNoRows {
-		return errors.New("basket does not exist")
-	}
-	if err != nil {
-		return err
-	}
-
-	res, err := dbs.db.ExecContext(ctx, query2, basketID, id)
+	res, err := dbs.db.ExecContext(ctx, query, id)
 	if err != nil {
 		return err
 	}
@@ -312,16 +310,18 @@ func (dbs *DBStore) DeletePin(ctx context.Context, basketName string, id int) er
 }
 
 func (dbs *DBStore) DeleteExpiredDeadlines(ctx context.Context) ([]*Deadline, error) {
-	nowFormattedUTC := time.Now().UTC().Format(TimeStorageFormat)
+	now := time.Now().UTC().Unix()
 
 	const selectQuery = `
-        SELECT id, title, datetime, reminder_count
-        FROM deadlines
-        WHERE datetime < ?;`
+		SELECT id, title, due_at, reminder_count
+		FROM deadlines
+		WHERE due_at <= ?;
+	`
 
 	const deleteQuery = `
-        DELETE FROM deadlines
-        WHERE datetime < ?;`
+		DELETE FROM deadlines
+		WHERE due_at <= ?;
+	`
 
 	tx, err := dbs.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -329,18 +329,23 @@ func (dbs *DBStore) DeleteExpiredDeadlines(ctx context.Context) ([]*Deadline, er
 	}
 	defer tx.Rollback()
 
-	rows, err := tx.QueryContext(ctx, selectQuery, nowFormattedUTC)
+	rows, err := tx.QueryContext(ctx, selectQuery, now)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
 	deletedDeadlines := []*Deadline{}
+
 	for rows.Next() {
 		d := &Deadline{}
-		if err := rows.Scan(&d.ID, &d.Title, &d.DateTime, &d.ReminderCount); err != nil {
+		var dueAt int64
+
+		if err := rows.Scan(&d.ID, &d.Title, &dueAt, &d.ReminderCount); err != nil {
 			return nil, err
 		}
+
+		d.DueAt = time.Unix(dueAt, 0).UTC()
 		deletedDeadlines = append(deletedDeadlines, d)
 	}
 
@@ -348,7 +353,7 @@ func (dbs *DBStore) DeleteExpiredDeadlines(ctx context.Context) ([]*Deadline, er
 		return nil, err
 	}
 
-	if _, err := tx.ExecContext(ctx, deleteQuery, nowFormattedUTC); err != nil {
+	if _, err := tx.ExecContext(ctx, deleteQuery, now); err != nil {
 		return nil, err
 	}
 
@@ -360,17 +365,18 @@ func (dbs *DBStore) DeleteExpiredDeadlines(ctx context.Context) ([]*Deadline, er
 }
 
 func (dbs *DBStore) GetAllActiveDeadlines(ctx context.Context) ([]*Deadline, error) {
-	nowFormatted := time.Now().Format("2006-01-02 15:04")
+	now := time.Now().UTC().Unix()
 	const maxReminderCount = 5
 
 	const query = `
-		SELECT id, title, datetime, reminder_count
+		SELECT id, title, due_at, reminder_count
 		FROM deadlines
-		WHERE datetime > ?
+		WHERE due_at > ?
 		  AND reminder_count < ?
-		ORDER BY datetime ASC;`
+		ORDER BY due_at ASC;
+	`
 
-	rows, err := dbs.db.QueryContext(ctx, query, nowFormatted, maxReminderCount)
+	rows, err := dbs.db.QueryContext(ctx, query, now, maxReminderCount)
 	if err != nil {
 		return nil, err
 	}
@@ -380,11 +386,13 @@ func (dbs *DBStore) GetAllActiveDeadlines(ctx context.Context) ([]*Deadline, err
 
 	for rows.Next() {
 		d := &Deadline{}
+		var dueAt int64
 
-		if err := rows.Scan(&d.ID, &d.Title, &d.DateTime, &d.ReminderCount); err != nil {
+		if err := rows.Scan(&d.ID, &d.Title, &dueAt, &d.ReminderCount); err != nil {
 			return nil, err
 		}
 
+		d.DueAt = time.Unix(dueAt, 0).UTC()
 		deadlines = append(deadlines, d)
 	}
 

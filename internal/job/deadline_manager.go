@@ -71,7 +71,7 @@ func (dm *DeadlineManager) runChecks(ctx context.Context) {
 		message := fmt.Sprintf(
 			"*Deadline Completed/Expired!*\nTask: *%s*\nWas due on: %s\n",
 			d.Title,
-			d.Time().Format(store.DisplayFormat),
+			d.DueAt.Format(store.DisplayFormat),
 		)
 		sendGroupMessage(dm.Client, dm.TargetJID, message)
 	}
@@ -84,7 +84,7 @@ func (dm *DeadlineManager) runChecks(ctx context.Context) {
 
 	now := time.Now()
 	for _, d := range deadlines {
-		deadlineTime := d.Time()
+		deadlineTime := d.DueAt
 
 		for i, interval := range ReminderIntervals {
 			reminderTime := deadlineTime.Add(-interval)

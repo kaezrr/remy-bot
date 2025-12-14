@@ -10,6 +10,7 @@ type Config struct {
 	SessionDir      string `json:"session_dir"`
 	Prefix          string `json:"prefix"`
 	TargetGroupName string `json:"target_group_name"`
+	Timezone        string `json:"timezone"`
 }
 
 func Load(path string) (*Config, error) {
@@ -20,5 +21,6 @@ func Load(path string) (*Config, error) {
 
 	var cfg Config
 	err = json.Unmarshal(b, &cfg)
+
 	return &cfg, err
 }

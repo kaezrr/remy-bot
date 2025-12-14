@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"strconv"
 	"strings"
 	"time"
@@ -16,13 +17,14 @@ type Response struct {
 	Text string
 }
 
-const HELP = `Usage:
+const HELP = `Available commands:
 .d  deadlines
 .b  Manage baskets
 .p  Manage pins
+.t  Random coin toss
 .h  Print this message
 
-Use <cmd> to list further commands`
+Type any command to see its usage`
 
 func Handle(ctx context.Context, input string, prefix string, s store.Store) Response {
 	after, found := strings.CutPrefix(input, prefix)
@@ -62,6 +64,16 @@ func Handle(ctx context.Context, input string, prefix string, s store.Store) Res
 		}
 		return Response{Text: result}
 
+	case "t":
+		randomBool := rand.IntN(2)
+		var result string
+		if randomBool == 1 {
+			result = "heads"
+		} else {
+			result = "tails"
+		}
+		return Response{Text: result}
+
 	case "h":
 		return Response{Text: HELP}
 	}
@@ -70,9 +82,9 @@ func Handle(ctx context.Context, input string, prefix string, s store.Store) Res
 }
 
 const BASKET_HELP = `Usage:
-.b list            list all baskets
-.b add <name>      add a new basket
-.b del <name>      remove a basket`
+.b get             list all baskets
+.b add [name]      add a new basket
+.b del [name]      remove a basket`
 
 func basketHandler(ctx context.Context, parts []string, s store.Store) (string, error) {
 	if len(parts) == 0 {
@@ -93,7 +105,7 @@ func basketHandler(ctx context.Context, parts []string, s store.Store) (string, 
 
 		return "basket created successfully", nil
 
-	case "list":
+	case "get":
 		baskets, err := s.ListBaskets(ctx)
 
 		if err != nil {
@@ -128,10 +140,9 @@ func basketHandler(ctx context.Context, parts []string, s store.Store) (string, 
 }
 
 const DEADLINE_HELP = `Usage:
-.d list                       list all deadlines
-.d del <id>                   remove a deadline
-.d add <date> <time> <title>  add a new deadline
-`
+.d get                        list all deadlines
+.d del [id]                   remove a deadline
+.d add [date] [time] [title]  add a new deadline`
 
 func deadlineHandler(ctx context.Context, parts []string, s store.Store) (string, error) {
 	if len(parts) == 0 {
@@ -139,7 +150,7 @@ func deadlineHandler(ctx context.Context, parts []string, s store.Store) (string
 	}
 
 	switch parts[0] {
-	case "list":
+	case "get":
 		deadlines, err := s.ListDeadlines(ctx)
 
 		if err != nil {
@@ -150,9 +161,10 @@ func deadlineHandler(ctx context.Context, parts []string, s store.Store) (string
 			return "no upcoming deadlines", nil
 		}
 
+		tz := s.Timezone()
 		out := "upcoming deadlines:\n"
 		for _, d := range deadlines {
-			localTime := d.Time().Format(store.DisplayFormat)
+			localTime := d.DueAt.In(tz).Format(store.DisplayFormat)
 			out += fmt.Sprintf("%d. %s (%s)\n", d.ID, d.Title, localTime)
 		}
 
@@ -178,22 +190,33 @@ func deadlineHandler(ctx context.Context, parts []string, s store.Store) (string
 
 		const InputFormat = "2006-01-02 15:04"
 
-		localDeadlineTime, err := time.ParseInLocation(InputFormat, inputTimeStr, time.Local)
+		tz := s.Timezone()
 
+		localDeadlineTime, err := time.ParseInLocation(
+			InputFormat,
+			inputTimeStr,
+			tz,
+		)
 		if err != nil {
 			return "", errors.New("invalid date/time format. Use YYYY-MM-DD HH:MM")
 		}
 
-		utcTimeStr := localDeadlineTime.UTC().Format(store.TimeStorageFormat)
+		dueAt := localDeadlineTime.UTC()
 		title := strings.Join(parts[3:], " ")
 
-		d, err := s.AddDeadline(ctx, title, utcTimeStr)
-
+		d, err := s.AddDeadline(ctx, title, dueAt)
 		if err != nil {
 			return "", err
 		}
 
-		return fmt.Sprintf("deadline #%d added: %s (%s)", d.ID, d.Title, d.Time().Format(store.DisplayFormat)), nil
+		displayTime := d.DueAt.In(tz).Format(store.DisplayFormat)
+
+		return fmt.Sprintf(
+			"deadline #%d added: %s (%s)",
+			d.ID,
+			d.Title,
+			displayTime,
+		), nil
 
 	case "del":
 		if len(parts) < 2 {
@@ -217,9 +240,9 @@ func deadlineHandler(ctx context.Context, parts []string, s store.Store) (string
 }
 
 const PIN_HELP = `Usage:
-.p list <basket>              list all pins in a basket
-.p add <basket> <content>     add a new pin
-.p del <basket> <id>          remove a pin from a basket`
+.p get [basket]            list all pins in a basket
+.p add [basket] [content]  add a new pin
+.p del [id]                remove a pin from a basket`
 
 func pinHandler(ctx context.Context, parts []string, s store.Store) (string, error) {
 	if len(parts) == 0 {
@@ -227,7 +250,7 @@ func pinHandler(ctx context.Context, parts []string, s store.Store) (string, err
 	}
 
 	switch parts[0] {
-	case "list":
+	case "get":
 		if len(parts) < 2 {
 			return "", errors.New("missing basket name")
 		}
@@ -271,22 +294,17 @@ func pinHandler(ctx context.Context, parts []string, s store.Store) (string, err
 
 	case "del":
 		if len(parts) < 2 {
-			return "", errors.New("missing basket name")
-		}
-
-		if len(parts) < 3 {
 			return "", errors.New("missing pin id")
 		}
 
-		name := parts[1]
-		idStr := parts[2]
+		idStr := parts[1]
 		id, err := strconv.Atoi(idStr)
 
 		if err != nil {
 			return "", errors.New("id must be an integer")
 		}
 
-		if err = s.DeletePin(ctx, name, id); err != nil {
+		if err = s.DeletePin(ctx, id); err != nil {
 			return "", err
 		}
 

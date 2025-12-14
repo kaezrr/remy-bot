@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"time"
 
 	"github.com/kaezrr/remy-bot/internal/bot"
 	"github.com/kaezrr/remy-bot/internal/config"
@@ -24,10 +25,22 @@ func main() {
 
 	cfg, err := config.Load("config.json")
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to load file")
+		log.Fatal().Err(err).Msg("failed to load config file")
 	}
 
-	s, err := store.NewDBStore(cfg.Database)
+	timezone, err := time.LoadLocation(cfg.Timezone)
+	if err != nil {
+		log.Fatal().Err(err).Msg("invalid timezone")
+	}
+
+	log.Info().Str("timezone", cfg.Timezone).Msg("Using configured timezone")
+	name, offset := time.Now().UTC().In(timezone).Zone()
+	log.Info().
+		Str("zone", name).
+		Int("offset_seconds", offset).
+		Msg("Timezone info")
+
+	s, err := store.NewDBStore(cfg.Database, timezone)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to start database")
 	}

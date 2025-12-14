@@ -5,19 +5,13 @@ import (
 	"time"
 )
 
+const DisplayFormat = "Mon, Jan 2 at 3:04 PM"
+
 type Deadline struct {
 	ID            int
 	Title         string
-	DateTime      string
+	DueAt         time.Time
 	ReminderCount int
-}
-
-const TimeStorageFormat = "2006-01-02T15:04:05Z"
-const DisplayFormat = "Mon, Jan 2 at 3:04 PM"
-
-func (d *Deadline) Time() time.Time {
-	t, _ := time.Parse(TimeStorageFormat, d.DateTime)
-	return t.Local()
 }
 
 type Pin struct {
@@ -32,7 +26,7 @@ type Basket struct {
 }
 
 type Store interface {
-	AddDeadline(ctx context.Context, title string, datetime string) (Deadline, error)
+	AddDeadline(ctx context.Context, title string, duaAt time.Time) (Deadline, error)
 	ListDeadlines(ctx context.Context) ([]Deadline, error)
 	DeleteDeadline(ctx context.Context, id int) error
 
@@ -46,5 +40,7 @@ type Store interface {
 
 	AddPin(ctx context.Context, basketName string, content string) (Pin, error)
 	ListPins(ctx context.Context, basketName string) ([]Pin, error)
-	DeletePin(ctx context.Context, basketName string, id int) error
+	DeletePin(ctx context.Context, id int) error
+
+	Timezone() *time.Location
 }
