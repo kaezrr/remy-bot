@@ -125,13 +125,6 @@ func (dm *DeadlineManager) runChecks(ctx context.Context) {
 	log.Info().Msg("Job: reminder cycle finished")
 }
 
-func pluralize(count int) string {
-	if count == 1 {
-		return ""
-	}
-	return "s"
-}
-
 func formatDuration(d time.Duration) string {
 	if d <= 0 {
 		return "now"
@@ -139,23 +132,39 @@ func formatDuration(d time.Duration) string {
 
 	d = d.Round(time.Minute)
 
-	days := d / (24 * time.Hour)
-	if days >= 1 {
-		daysInt := int(days)
-		return fmt.Sprintf("%d day%s", daysInt, pluralize(daysInt))
+	plural := func(n int) string {
+		if n == 1 {
+			return ""
+		}
+		return "s"
 	}
 
-	hours := d / time.Hour
-	if hours >= 1 {
-		hoursInt := int(hours)
-		return fmt.Sprintf("%d hour%s", hoursInt, pluralize(hoursInt))
-	}
+	days := int(d / (24 * time.Hour))
+	hours := int((d % (24 * time.Hour)) / time.Hour)
+	minutes := int((d % time.Hour) / time.Minute)
 
-	minutes := d / time.Minute
-	if minutes >= 1 {
-		minutesInt := int(minutes)
-		return fmt.Sprintf("%d minute%s", minutesInt, pluralize(minutesInt))
-	}
+	switch {
+	case days > 0:
+		return fmt.Sprintf(
+			"%d day%s %d hour%s",
+			days, plural(days),
+			hours, plural(hours),
+		)
 
-	return "less than a minute"
+	case hours > 0:
+		return fmt.Sprintf(
+			"%d hour%s %d minute%s",
+			hours, plural(hours),
+			minutes, plural(minutes),
+		)
+
+	case minutes > 0:
+		return fmt.Sprintf(
+			"%d minute%s",
+			minutes, plural(minutes),
+		)
+
+	default:
+		return "less than a minute"
+	}
 }
