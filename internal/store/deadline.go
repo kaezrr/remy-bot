@@ -7,6 +7,7 @@ import (
 )
 
 var ReminderSchedule = []time.Duration{
+	1 * time.Hour,
 	3 * time.Hour,
 	6 * time.Hour,
 	12 * time.Hour,
