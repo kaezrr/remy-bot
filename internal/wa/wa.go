@@ -17,6 +17,7 @@ import (
 	"go.mau.fi/whatsmeow"
 	waE2E "go.mau.fi/whatsmeow/proto/waE2E"
 	waStore "go.mau.fi/whatsmeow/store/sqlstore"
+	"go.mau.fi/whatsmeow/types"
 	waTypes "go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 	"google.golang.org/protobuf/proto"
@@ -126,6 +127,9 @@ func Run(cfg *config.Config, s store.Store, handle BotHandleFunc) error {
 		Store:     s,
 		TargetJID: targetJID,
 	}
+
+	// Send availability presence to whatsapp
+	client.SendPresence(ctx, types.PresenceAvailable)
 
 	go manager.Start(ctx)
 
